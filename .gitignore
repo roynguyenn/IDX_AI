@@ -1,0 +1,22 @@
+# SQL data files (too large, contains data)
+*.sql
+
+# Python virtual environment
+venv/
+
+# Environment variables / secrets
+.env
+
+# Node modules
+node_modules/
+
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# Python cache
+__pycache__/
+*.pyc
+
+#open claw
+openclaw/
