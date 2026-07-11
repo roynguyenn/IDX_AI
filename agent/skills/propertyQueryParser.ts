@@ -1,4 +1,4 @@
-interface PropertyFilters {
+export interface PropertyFilters {
   city: string | null;
   maxPrice: number | null;
   beds: number | null;
@@ -59,25 +59,3 @@ export async function parsePropertyQuery(query: string): Promise<PropertyFilters
   };
 }
 
-// Test it
-async function test() {
-  const queries = [
-    "Show me 3 bedroom condos in Irvine under $1.5M with a pool",
-    "Find single family homes in Pasadena under $800k with a view",
-    "2 bed townhome in Newport Beach under $900k",
-    "Find a 4 bed 2.5 bath house in San Diego under $1.2M",
-    "Show me condos in Santa Monica with at least 1200 sqft",
-    "3 bedroom single family home in Riverside under $600k with a pool and a view",
-    "Land for sale in Malibu under $2M",
-    "2 bed 1 bath condo in Long Beach under $500k",
-    "Townhome in Irvine under $1M with a view",
-    "Single family home in Pasadena with a pool under $950000"
-  ];
-
-  for (const q of queries) {
-    console.log("\nQuery:", q);
-    console.log("Result:", await parsePropertyQuery(q));
-  }
-}
-
-test();

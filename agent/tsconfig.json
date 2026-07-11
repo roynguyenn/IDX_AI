@@ -5,7 +5,8 @@
     "strict": true,
     "esModuleInterop": true,
     "outDir": "./dist",
-    "rootDir": "./skills"
+    "rootDir": "./skills",
+    "types": ["node"]
   },
   "include": ["skills/**/*.ts"]
 }

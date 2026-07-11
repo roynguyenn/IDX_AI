@@ -64,18 +64,35 @@ export async function searchActiveListings(filters: PropertyFilters, page = 1, l
   return query(sql, params);
 }
 
-// Testing for rets_property
-async function test() {
-  const results = await searchActiveListings({
-    city: "Irvine",
-    maxPrice: 1500000,
-    beds: 3,
-  });
-
-  console.log(`Found ${results.length} listings:`);
-  console.log(results);
-
-  process.exit(0); // closes the connection pool so the script actually stops
+export async function getSoldComps(city: string, months = 12) {
+  const sql = `
+    SELECT
+      ListingKey, UnparsedAddress, City, CloseDate, ClosePrice,
+      OriginalListPrice, ListPrice, DaysOnMarket,
+      BedroomsTotal, BathroomsTotalInteger, LivingArea,
+      PropertyType, PropertySubType, YearBuilt,
+      ListAgentFullName, ListOfficeName, BuyerOfficeName
+    FROM california_sold
+    WHERE City = ?
+      AND CloseDate >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
+      AND PropertyType = "Residential"
+    ORDER BY CloseDate DESC
+    LIMIT 50
+  `;
+  return query(sql, [city, months]);
 }
 
-test();
+
+// Testing for rets_property
+async function test() {
+  const listings = await searchActiveListings({ city: "Irvine", maxPrice: 1500000, beds: 3 });
+  console.log(`Found ${listings.length} active listings`);
+
+  const comps = await getSoldComps("Irvine", 24);
+  console.log(`Found ${comps.length} sold comps`);
+  console.log(comps.slice(0, 3)); 
+
+  process.exit(0);
+}
+
+
