@@ -1,6 +1,6 @@
 import { PropertyFilters } from "./propertyQueryParser";
 
-interface UserSession {
+export interface UserSession {
   city?: string;
   maxPrice?: number;
   beds?: number;
