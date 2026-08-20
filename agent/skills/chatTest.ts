@@ -3,6 +3,9 @@ import { parsePropertyQuery } from "./propertyQueryParser";
 import { getSession, updateSession, getNextQuestion } from "./sessionManager";
 import { searchActiveListings } from "./mlsDataBase";
 
+
+//This file uses in memory session management 
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
