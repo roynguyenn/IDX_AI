@@ -8,6 +8,7 @@ export interface UserSession {
   type?: string;
   pool?: string;
   lastResults?: any[];
+  lastListingId?: string; 
   conversationStep: number;
 }
 
