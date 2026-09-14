@@ -108,3 +108,4 @@ if __name__ == "__main__":
     q = "What's the average price per square foot in Irvine?"
     print(f"Q: {q}")
     print(f"A: {rag_answer(q, index)}")
+

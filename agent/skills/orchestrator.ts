@@ -1,5 +1,5 @@
 
-type Intent = "search" | "market" | "recommend" | "knowledge" | "mixed" | "unknown";
+type Intent = "search" | "market" | "recommend" | "knowledge" | "email" | "mixed" | "unknown";
 
 export function classifyIntent(query: string): Intent {
   const q = query.toLowerCase();
@@ -8,12 +8,23 @@ export function classifyIntent(query: string): Intent {
   const marketWords = ["market", "trend", "rising", "falling", "average price", "days on market", "price per"];
   const recommendWords = ["similar", "recommend", "like this", "comparable", "comp"];
   const knowledgeWords = ["what does", "what is", "mean", "define", "explain"];
+  const emailWords = [
+    "email me", "email a", "send me an email", "send an email", "draft an email",
+    "weekly market report", "market report", "listing alert", "email digest",
+    "approve", "confirm send",
+  ];
+  const approvalWords = ["approve", "confirm", "yes send", "send it"];
 
   const hasSearch = searchWords.some(w => q.includes(w));
   const hasMarket = marketWords.some(w => q.includes(w));
   const hasRecommend = recommendWords.some(w => q.includes(w));
   const hasKnowledge = knowledgeWords.some(w => q.includes(w));
+  const hasEmail = emailWords.some(w => q.includes(w));
+  const hasApproval = approvalWords.some(w => q.includes(w));
 
+  // approval/email checks run first: "send me a market report" contains "market" but is an
+  // email deliverable, not a per-city marketStatsAgent lookup
+  if (hasApproval || hasEmail) return "email";
   if (hasKnowledge) return "knowledge";
   if (hasRecommend) return "recommend";
   if (hasSearch && hasMarket) return "mixed";
@@ -39,9 +50,16 @@ function test() {
 
 
 import { execSync } from "child_process";
+import * as path from "path";
 import { parsePropertyQuery } from "./propertyQueryParser";
 import { getSession, updateSession, getNextQuestion } from "./sessionManager";
 import { searchActiveListings } from "./mlsDataBase";
+import { buildWeeklyMarketReportDraft, buildListingAlertDraft, sendApprovedEmail, stripHtml } from "./emailAgent";
+
+// bare "python" on PATH resolves to the Conda base interpreter (no mysql-connector-python
+// or other project deps installed) instead of this project's venv — always call the venv
+// interpreter explicitly so execSync subprocesses get the right packages.
+const PYTHON = `"${path.join(__dirname, "..", "..", "venv", "Scripts", "python.exe")}"`;
 
 async function propertySearchAgent(query: string, userId: string): Promise<string> {
   const session = getSession(userId);
@@ -80,7 +98,7 @@ function marketStatsAgent(query: string): string {
   const city = cityMatch?.[1]?.trim() || "Irvine";
 
   const output = execSync(
-    `cd ../../analytics && python -c "from marketStats import get_city_market_summary; import pandas as pd; df = get_city_market_summary(); row = df[df['City'] == '${city}']; print(row.to_string(index=False) if not row.empty else 'No data for ${city}')"`,
+    `cd ../../analytics && ${PYTHON} -c "from marketStats import get_city_market_summary; import pandas as pd; df = get_city_market_summary(); row = df[df['City'] == '${city}']; print(row.to_string(index=False) if not row.empty else 'No data for ${city}')"`,
     { encoding: "utf-8" }
   );
   return output.trim();
@@ -88,7 +106,7 @@ function marketStatsAgent(query: string): string {
 
 function ragAgent(query: string): string {
   const output = execSync(
-    `cd ../../analytics && python -c "from rag import rag_answer, load_documents, index_documents; import json; index = json.load(open('rag_index.json')); print(rag_answer('${query.replace(/'/g, "\\'")}', index))"`,
+    `cd ../../analytics && ${PYTHON} -c "from rag import rag_answer, load_documents, index_documents; import json; index = json.load(open('rag_index.json')); print(rag_answer('${query.replace(/'/g, "\\'")}', index))"`,
     { encoding: "utf-8" }
   );
   return output.trim();
@@ -115,11 +133,54 @@ function recommendationAgent(userId: string): string {
   }
 
   const output = execSync(
-    `cd ../../analytics && python recommend_cli.py "${session.lastListingId}"`,
+    `cd ../../analytics && ${PYTHON} recommend_cli.py "${session.lastListingId}"`,
     { encoding: "utf-8" }
   );
 
   return output.trim();
+}
+
+function extractEmailAddress(query: string): string | null {
+  const match = query.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  return match ? match[0] : null;
+}
+
+const APPROVAL_PATTERN = /\b(approve|confirm|yes send|send it)\b/i;
+
+async function emailDraftAgent(query: string, userId: string): Promise<string> {
+  const session = getSession(userId);
+
+  if (APPROVAL_PATTERN.test(query)) {
+    if (!session.pendingEmailDraft) {
+      return "There's no pending email draft to send. Ask for a market report or listing alert first.";
+    }
+    const draft = session.pendingEmailDraft;
+    try {
+      await sendApprovedEmail(draft);
+      updateSession(userId, { pendingEmailDraft: undefined });
+      return `Sent to ${draft.to}.`;
+    } catch (err: any) {
+      return `Could not send: ${err.message}`;
+    }
+  }
+
+  const to = extractEmailAddress(query) || process.env.EMAIL_USER;
+  if (!to) {
+    return "I need an email address to send to (and EMAIL_USER isn't configured as a default either).";
+  }
+
+  const isMarketReport = /market|report/i.test(query);
+  const result = isMarketReport
+    ? await buildWeeklyMarketReportDraft(to)
+    : await buildListingAlertDraft(to, session);
+
+  updateSession(userId, { pendingEmailDraft: result.draft });
+
+  return (
+    `Draft ready (NOT sent yet):\n` +
+    `To: ${result.draft.to}\nSubject: ${result.draft.subject}\n\n${stripHtml(result.draft.body)}\n\n` +
+    `Reply "approve" to send this email.`
+  );
 }
 
 export async function orchestrate(query: string, userId: string): Promise<string> {
@@ -137,6 +198,9 @@ export async function orchestrate(query: string, userId: string): Promise<string
 
     case "knowledge":
       return ragAgent(query);
+
+    case "email":
+      return await emailDraftAgent(query, userId);
 
     case "mixed": {
       const [listings, stats] = await Promise.all([
@@ -184,5 +248,5 @@ async function testOrchestrator2() {
 }
 
 if (require.main === module) {
-  testOrchestrator2();
+  testOrchestrator();
 }

@@ -11,7 +11,7 @@ export interface PropertyFilters {
 
 export async function parsePropertyQuery(query: string): Promise<PropertyFilters> {
     // city
-    const cityMatch = query.match(/in ([A-Zaz\s]+?)(?:\s+under|\s+with|\s+at|$)/i);
+    const cityMatch = query.match(/in ([A-Za-z\s]+?)(?:\s+under|\s+with|\s+at|\s+and|\s+but|$)/i);
 
     // price
     const priceMatch = query.match(/under \$?([\d,.]+)(k|m)?/i);

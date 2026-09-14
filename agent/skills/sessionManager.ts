@@ -1,5 +1,11 @@
 import { PropertyFilters } from "./propertyQueryParser";
 
+export interface EmailDraft {
+  to: string;
+  subject: string;
+  body: string;
+}
+
 export interface UserSession {
   city?: string;
   maxPrice?: number;
@@ -8,8 +14,9 @@ export interface UserSession {
   type?: string;
   pool?: string;
   lastResults?: any[];
-  lastListingId?: string; 
+  lastListingId?: string;
   conversationStep: number;
+  pendingEmailDraft?: EmailDraft;
 }
 
 const sessions = new Map<string, UserSession>();
